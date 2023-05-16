@@ -1,4 +1,4 @@
-name: CI with CodeGuru_Reviewer
+name: CI with CodeGuru Reviewer
 
 on:
   push:
