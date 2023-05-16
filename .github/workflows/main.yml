@@ -1,0 +1,62 @@
+name: CI with CodeGuru_Reviewer
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+    
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      actions: read
+      # Required to interact with GitHub's OIDC Token endpoint
+      id-token: write
+      # Required for Checkout action
+      contents: read
+      # Required for CodeQL action (upload SARIF file)
+      security-events: write
+      
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        
+    - name: Configure AWS Credentials
+      if: ${{ always() }}
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-1
+        
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: 11
+        
+    - name: Download CodeGuru Reviewer CLI
+      shell: bash
+      env:
+        VERSION: 0.2.1
+      run: curl -OL "https://github.com/aws/aws-codeguru-cli/releases/download/$VERSION/aws-codeguru-cli.zip"
+    - run: unzip aws-codeguru-cli.zip
+        
+    - name: Build with maven
+      run: mvn -B package --file pom.xml
+      
+    - name: CodeGuru Reviewer
+      uses: aws-actions/codeguru-reviewer@v1.1
+      if: ${{ always() }}
+      with:
+        build_path: target
+        s3_bucket: codeguru-reviewer-git-ci
+        
+    - name: Upload review relust
+      if: ${{ github.event_name != 'push' }}
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: codeguru-results.sarif.json
